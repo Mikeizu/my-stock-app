@@ -106,4 +106,3 @@ def test_applies_financials_to_news_only_item_without_inventing_price():
     updated = apply_fundamentals(item, values)
     assert updated["metrics"]["price"] is None
     assert updated["metrics"]["pe"] == 24
-
