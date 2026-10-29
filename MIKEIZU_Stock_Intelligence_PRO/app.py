@@ -10,6 +10,8 @@ from engine import (
 from providers import load_market, load_news_bundle, csv_market
 from markets import MARKETS, market_symbols, resolve_symbols
 from research import evaluate_unified
+from workflow import fetch_research
+from exports import safe_csv
 from dashboard import render_discovery, find_companies
 from storage import save, remove, all_items
 from ollama_helper import summarize_locally
@@ -58,25 +60,9 @@ def fmt_num(v, digits=2):
     return "N/A" if v is None else f"{v:,.{digits}f}"
 
 
-def fetch(symbol: str, with_news: bool = True, country: str = "United States"):
-    symbols = resolve_symbols(symbol, country)
-    if len(symbols) != 1:
-        raise ValueError("Enter one ticker for company research.")
-    sym = symbols[0]
-    prices, info, fetched = get_market_cached(sym)
-    metrics = get_metrics(prices, info)
-    metrics["price_adjusted"] = "Adj Close" in prices
-    bundle = {"articles": [], "errors": [], "queries": []}
-    if with_news:
-        try:
-            bundle = get_news_cached(metrics["name"] if metrics["name"] != "Unknown company" else sym, sym, country)
-        except Exception as exc:
-            bundle["errors"] = [str(exc)[:280]]
-    news = sentiment_from_headlines(bundle["articles"])
-    return {"symbol": sym, "prices": prices, "info": info, "fetched": fetched,
-            "metrics": metrics, "news": news, "news_error": "; ".join(bundle["errors"]),
-            "news_queries": bundle["queries"], "country": country,
-            "source": "Yahoo Finance / yfinance (unofficial, potentially delayed)"}
+def fetch(symbol: str, with_news: bool = True, country: str = "United States", financials=None):
+    news_fetch = get_news_cached if with_news else lambda *args: {"articles": [], "errors": [], "queries": []}
+    return fetch_research(symbol, country, get_market_cached, news_fetch, financials=financials)
 
 
 def panel_metrics(m):
@@ -131,8 +117,10 @@ def show_assessment(research, goal):
 with st.sidebar:
     st.markdown("### <span style='color:#5ce8d3'>MIKEIZU</span> / INTELLIGENCE", unsafe_allow_html=True)
     st.caption("GLOBAL EQUITY RESEARCH")
-    country = st.selectbox("Stock market / country", list(MARKETS),
-                           help="Filters the listing exchange, not the company's headquarters. ADRs can be listed in a different country.")
+    countries = st.multiselect("Countries to research", list(MARKETS), default=["Nigeria", "United States"], max_selections=8,
+                               help="Research up to eight listing markets together. Country means listing exchange, not company headquarters.")
+    country = st.selectbox("Country for individual tools", countries or list(MARKETS),
+                           help="Sets the country for single-stock input and imports. The main basket researches all selected countries.")
     goal = st.selectbox("Investment strategy", ["Balanced", "Income", "Growth"],
                         help="Adjusts the seven research-factor weights. No strategy guarantees a return.")
     st.divider()
@@ -152,8 +140,8 @@ with st.sidebar:
 st.markdown("""
 <div class="mark">
 <div class="eyebrow">GLOBAL MARKETS · CONNECTED RESEARCH</div>
-<h1>MIKEIZU STOCK INTELLIGENCE <span style="color:#5ce8d3">PRO</span></h1>
-<p>Country discovery · Unified percentage rankings · Source-linked news · Risk & opportunity analysis</p>
+<h1>MIKEIZU STOCK INTELLIGENCE <span style="color:#5ce8d3">PRO v3</span></h1>
+<p>Multi-country deep research · Buy / Sell indicators · Plain-language briefs · Monthly & annual returns</p>
 </div>
 """, unsafe_allow_html=True)
 st.caption("Personal investment research · Percentage scores summarize observed evidence, not profit probabilities. Prices may be delayed; check source timestamps.")
@@ -162,7 +150,7 @@ tabs = st.tabs(["🌍 Discover & Rank", "📊 Deep Research", "📰 News Intelli
                 "🧪 Backtest Lab", "⭐ Watchlist", "📁 CSV / NGX Data", "⚙️ Setup & AI"])
 
 with tabs[0]:
-    render_discovery(country, goal, fetch, get_news_cached, show_assessment, show_headlines)
+    render_discovery(countries, goal, fetch, get_news_cached, show_assessment, show_headlines)
 
 with tabs[1]:
     st.subheader("Company research & return scenarios")
@@ -173,14 +161,14 @@ with tabs[1]:
                 st.session_state["research"] = fetch(symbol, True, country)
         except Exception as exc:
             st.error("Analysis could not complete: " + str(exc))
-    if "research" in st.session_state and st.session_state["research"].get("country") == country:
+    if "research" in st.session_state and st.session_state["research"].get("country") in countries and st.session_state["research"]["metrics"]["price"] is not None:
         item = st.session_state["research"]
         m, prices = item["metrics"], item["prices"]
         show_assessment(item, goal)
         p1,p2 = st.columns([2,1])
         with p1:
             st.subheader("Historical adjusted performance")
-            adj = prices[["Adj Close"]].dropna() if "Adj Close" in prices else prices[["Close"]].dropna()
+            adj = prices[["Adj Close"]].dropna() if m.get("price_adjusted") and "Adj Close" in prices else prices[["Close"]].dropna()
             st.line_chart(adj.rename(columns={adj.columns[0]: "Dividend-adjusted price" if m.get("price_adjusted", True) else "Unadjusted closing price"}), height=300)
             st.caption("Price series may reflect split and cash-dividend adjustments; it is not a tradeable current quote.")
             if not m.get("price_adjusted", True):
@@ -192,6 +180,9 @@ with tabs[1]:
         horizon = st.select_slider("Investment horizon", options=[1,3,6,12,24], value=12,
                                    format_func=lambda v: f"{v} month{'s' if v>1 else ''}")
         try:
+            age = (datetime.now(timezone.utc).date() - datetime.fromisoformat(m["as_of"]).date()).days
+            if not 0 <= age <= 7:
+                raise ValueError("Fresh price history within seven days is required for future scenarios. Historical results remain available.")
             simulation = bootstrap_returns(prices, horizon_months=horizon)
             lo, mid, hi = st.columns(3)
             lo.metric("Pessimistic historical-resampling scenario (10th percentile)", fmt_pct(simulation["p10"]))
@@ -201,7 +192,7 @@ with tabs[1]:
         except ValueError as exc:
             st.info(str(exc))
         if st.button("Add this stock to watchlist", key="from_research"):
-            save(item["symbol"])
+            save(item["symbol"], country=item["country"])
             st.success("Added to your local watchlist.")
     else:
         st.info("Select a ranked stock in Discover & Rank, or enter a market ticker here. For Nigeria, use CSV histories in Discover & Rank.")
@@ -209,7 +200,7 @@ with tabs[1]:
 with tabs[2]:
     st.subheader("Financial news intelligence")
     st.write("The app retrieves recent headlines, links you to their sources, scores headline tone, and optionally summarizes them using a locally running AI model.")
-    if "research" in st.session_state and st.session_state["research"].get("country") == country:
+    if "research" in st.session_state and st.session_state["research"].get("country") in countries:
         item = st.session_state["research"]
         news = item["news"]
         sc = news["average"]
@@ -234,7 +225,7 @@ with tabs[2]:
 with tabs[3]:
     st.subheader("Dividend income planner")
     st.write("Estimate cash distributions if the *past trailing annual payment per share* were repeated. Future dividends can change or stop.")
-    if "research" in st.session_state and st.session_state["research"].get("country") == country:
+    if "research" in st.session_state and st.session_state["research"].get("country") in countries and st.session_state["research"]["metrics"]["price"] is not None:
         item = st.session_state["research"]
         m = item["metrics"]
         if m["dividend_12m"] is None:
@@ -257,7 +248,7 @@ with tabs[3]:
 with tabs[4]:
     st.subheader("Historical backtest — 200/100/50 day moving average")
     st.write("Compares a long-or-cash trend strategy with buy-and-hold. A signal observed at today's close becomes active the *next* trading session; transaction costs are deducted.")
-    if "research" in st.session_state and st.session_state["research"].get("country") == country:
+    if "research" in st.session_state and st.session_state["research"].get("country") in countries and st.session_state["research"]["metrics"]["price"] is not None:
         window = st.select_slider("Moving-average days", options=[50,100,200], value=200)
         fee = st.slider("Cost per position entry/exit (%)", min_value=0.0, max_value=1.0, step=0.05, value=0.15) / 100
         try:
@@ -281,21 +272,25 @@ with tabs[5]:
         st.info("Your watchlist is empty. Add symbols from this page or Deep Research.")
     else:
         st.dataframe(existing, hide_index=True, use_container_width=True)
-        st.download_button("Export watchlist", existing.to_csv(index=False), "mikeizu_watchlist.csv", "text/csv")
+        st.download_button("Export watchlist", safe_csv(existing), "mikeizu_watchlist.csv", "text/csv")
     with st.form("watchlist_edit"):
-        symbol_to_save = st.text_input("Ticker", value="KO")
+        watch_country = st.selectbox("Watchlist country", list(MARKETS), index=list(MARKETS).index(country))
+        symbol_to_save = st.text_input("Ticker", value="")
         thesis = st.text_area("Why are you watching it?", height=80)
         target = st.number_input("Optional review price (0 means none)", min_value=0.0, step=1.0, value=0.0)
         submitted = st.form_submit_button("Save / update ticker", type="primary")
     if submitted:
         try:
-            save(symbol_to_save, thesis, None if target == 0 else target)
+            symbols = resolve_symbols(symbol_to_save, watch_country)
+            if len(symbols) != 1:
+                raise ValueError("Enter exactly one ticker.")
+            save(symbols[0], thesis, None if target == 0 else target, country=watch_country)
             st.success("Saved in your computer's SQLite watchlist. Refresh this tab to see it.")
         except Exception as exc: st.error(str(exc))
     if not existing.empty:
-        removing = st.selectbox("Remove ticker", existing["symbol"].tolist())
+        removing = st.selectbox("Remove ticker", list(zip(existing["country"], existing["symbol"])), format_func=lambda entry: entry[0] + " · " + entry[1])
         if st.button("Remove selected ticker"):
-            remove(removing)
+            remove(removing[1], country=removing[0])
             st.success("Removed. Refresh this tab to see the updated watchlist.")
     st.caption("Storage: data/watchlist.sqlite3. No cloud syncing, email alerting or broker permissions are enabled.")
 
@@ -311,8 +306,8 @@ with tabs[6]:
         try:
             prices, info, fetched = csv_market(file, custom_name)
             info["currency"] = custom_currency.strip().upper()[:10] or "Unknown"
+            prices.attrs["price_adjusted"] = info.get("price_adjusted", False)
             m = get_metrics(prices, info)
-            m["price_adjusted"] = info.get("price_adjusted", False)
             news = sentiment_from_headlines([])
             custom_result = {"symbol": "CSV", "prices": prices, "info": info, "fetched": fetched,
                              "metrics": m, "news": news, "source": "User-imported CSV", "country": country}
@@ -327,7 +322,8 @@ with tabs[6]:
 with tabs[7]:
     st.subheader("Setup, methodology & responsible use")
     st.markdown("""
-**Included now:** Country selector for 30 listing markets, company search, a combined research basket,
+**Included now:** Select several countries together from 30 listing markets, a 36-company Nigerian directory, company search, a combined research basket,
+Buy / holder-only Sell / Not good to buy / Wait for data indicators, calendar-based monthly and annual returns,
 seven-factor percentage rankings, input-level data coverage, source-linked Google/Yahoo RSS news,
 conditional prospects and risks, fundamentals, price history,
 scenario modelling, dividend planner, historical strategy testing, CSV imports and persistent watchlists.
@@ -339,8 +335,9 @@ Without Ollama, rule-based headline analysis works. This is not a guaranteed-pro
 and vendor terms may restrict reuse. All quotes should be verified with the relevant stock exchange/broker.
 For public or commercial deployment, use licensed market-data and news feeds.
 
-**Nigeria/NGX:** Upload authorized CSV history or arrange a licensed NGX feed; support for any particular
-Yahoo symbol is not guaranteed. Do not label delayed prices as live quotes.
+**Nigeria/NGX:** Browse the built-in company directory, research regional news, import authorized daily
+CSV history and dated financial statements, and optionally retain NGX data locally. The .NGX suffix is an
+internal app identifier; no Yahoo NGX or live licensed feed is supplied. Missing evidence gets WAIT FOR DATA.
 
 **No auto trading:** The application never connects to a broker, buys shares, executes orders, or guarantees returns.
 """)

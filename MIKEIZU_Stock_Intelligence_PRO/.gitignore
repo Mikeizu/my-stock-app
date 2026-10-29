@@ -5,3 +5,4 @@ data/*.sqlite3*
 data/provider-cache/
 *.log
 .streamlit/secrets.toml
+data/ngx/

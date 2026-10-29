@@ -45,20 +45,82 @@ def clip(value: float, lo: float = 0, hi: float = 100) -> float:
     return float(np.clip(value, lo, hi))
 
 
+def _clean_daily_frame(prices: pd.DataFrame) -> pd.DataFrame:
+    """Normalize daily dates once, keeping the last supplied duplicate row.
+
+    Numeric indexes are not dates: silently treating row numbers as nanosecond
+    timestamps can make an arbitrary table look like high-frequency history.
+    This helper does not create missing sessions or fill missing prices.
+    """
+    if prices.empty or "Close" not in prices:
+        return pd.DataFrame()
+    if not isinstance(prices.index, pd.DatetimeIndex):
+        if pd.api.types.is_numeric_dtype(prices.index.dtype):
+            raise ValueError("Price history requires dated daily observations, not a numeric row index.")
+        dates = pd.to_datetime(prices.index, errors="coerce")
+    else:
+        dates = prices.index
+    if not isinstance(dates, pd.DatetimeIndex):
+        raise ValueError("Price history requires a consistent daily date index.")
+    if dates.tz is not None:
+        dates = dates.tz_localize(None)
+    frame = prices.copy()
+    frame.index = dates.normalize()
+    frame = frame[frame.index.notna()].sort_index(kind="stable")
+    frame = frame[~frame.index.duplicated(keep="last")]
+    raw = pd.to_numeric(frame["Close"], errors="coerce")
+    frame = frame.loc[np.isfinite(raw) & (raw > 0)].copy()
+    frame["Close"] = raw.loc[frame.index].astype(float)
+    return frame
+
+
+def _require_daily_history(series: pd.Series) -> None:
+    """Reject weekly/monthly inputs before any daily annualization or resampling.
+
+    Daily exchange data includes weekends and holidays. A four-calendar-day
+    median threshold tolerates those closures, while a sparse-interval check
+    prevents a mixture of daily and mostly weekly observations slipping through.
+    This is a cadence check, not a complete exchange-calendar validation.
+    """
+    if len(series) < 2:
+        raise ValueError("Not enough historical price observations for analysis.")
+    gaps = series.index.to_series().diff().dt.total_seconds().dropna() / 86400
+    if float(gaps.median()) > 4 or float((gaps > 4).mean()) > .2:
+        raise ValueError("Daily closing-price history is required; weekly, monthly or sparse observations cannot be treated as trading days.")
+
+
+def _price_inputs(prices: pd.DataFrame, *, adjusted_allowed: bool = True
+                  ) -> tuple[pd.DataFrame, pd.Series, pd.Series, bool, list[str]]:
+    frame = _clean_daily_frame(prices)
+    if frame.empty:
+        empty = pd.Series(dtype=float)
+        return frame, empty, empty, False, []
+    raw = frame["Close"].copy()
+    chosen, is_adjusted, warnings = raw, False, []
+    if adjusted_allowed and prices.attrs.get("price_adjusted", True) and "Adj Close" in frame:
+        candidate = pd.to_numeric(frame["Adj Close"], errors="coerce")
+        valid = (np.isfinite(candidate) & (candidate > 0)).fillna(False)
+        if bool(valid.all()):
+            chosen, is_adjusted = candidate.astype(float), True
+        else:
+            warnings.append("Adjusted closing prices are incomplete or stale; the entire return series uses unadjusted closes, so dividends or split effects may be omitted.")
+    else:
+        warnings.append("No validated adjusted closing-price series was supplied; returns use unadjusted prices and may omit dividends or include split distortions.")
+    return frame, raw, chosen, is_adjusted, warnings
+
+
 def closes(prices: pd.DataFrame, adjusted: bool = False) -> pd.Series:
-    field = "Adj Close" if adjusted and "Adj Close" in prices else "Close"
-    if prices.empty or field not in prices:
-        return pd.Series(dtype=float)
-    series = pd.to_numeric(prices[field], errors="coerce").dropna()
-    return series[series > 0].sort_index()
+    """Return one coherent dated series; never use an old adjusted endpoint."""
+    _, raw, selected, _, _ = _price_inputs(prices)
+    return selected if adjusted else raw
 
 
 def get_metrics(prices: pd.DataFrame, info: dict[str, Any] | None = None) -> dict[str, Any]:
     info = info or {}
-    raw = closes(prices)
-    adj = closes(prices, adjusted=True)
-    if len(raw) < 2 or len(adj) < 2:
-        raise ValueError("Not enough historical price observations for analysis.")
+    frame, raw, adj, price_adjusted, data_warnings = _price_inputs(
+        prices, adjusted_allowed=info.get("price_adjusted", True) is not False,
+    )
+    _require_daily_history(raw)
     last = float(raw.iloc[-1])
     def ret(days: int) -> float | None:
         if len(adj) <= days:
@@ -77,9 +139,8 @@ def get_metrics(prices: pd.DataFrame, info: dict[str, Any] | None = None) -> dic
     else:
         rsi = None
 
-    if "Dividends" in prices:
-        divs = pd.to_numeric(prices["Dividends"], errors="coerce").fillna(0).clip(lower=0)
-        divs.index = pd.to_datetime(divs.index)
+    if "Dividends" in frame:
+        divs = pd.to_numeric(frame["Dividends"], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0).clip(lower=0)
         threshold = divs.index[-1] - pd.DateOffset(years=1)
         trailing_div = float(divs.loc[divs.index > threshold].sum())
         annual = divs.resample("YE").sum()
@@ -109,6 +170,9 @@ def get_metrics(prices: pd.DataFrame, info: dict[str, Any] | None = None) -> dic
         "pe": pe, "payout": payout, "debt_eq": debt_eq, "profit_margin": profit_margin,
         "roe": roe, "revenue_growth": growth,
         "market_cap": safe_float(info.get("marketCap")),
+        "price_adjusted": price_adjusted,
+        "return_basis": "adjusted total return" if price_adjusted else "unadjusted price return",
+        "data_warnings": data_warnings,
     }
 
 
@@ -212,7 +276,8 @@ def evaluate(metrics: dict[str, Any], news: dict[str, Any] | None, goal: str = "
 def bootstrap_returns(prices: pd.DataFrame, horizon_months: int = 6,
                       trials: int = 1000, seed: int = 41) -> dict[str, Any]:
     """Historical 5-day block resampling; a *scenario*, not calibrated prediction."""
-    prices_adj = closes(prices, adjusted=True)
+    _, _, prices_adj, price_adjusted, data_warnings = _price_inputs(prices)
+    _require_daily_history(prices_adj)
     if len(prices_adj) < 252:
         raise ValueError("At least 252 historical daily prices required for scenario modelling.")
     returns = np.log(prices_adj / prices_adj.shift(1)).replace([np.inf, -np.inf], np.nan).dropna().tail(756).to_numpy()
@@ -232,13 +297,16 @@ def bootstrap_returns(prices: pd.DataFrame, horizon_months: int = 6,
     return {"p10": p10, "median": p50, "p90": p90,
             "positive_fraction": float((projected > 0).mean()),
             "samples": trials, "months": months, "history_days": len(returns),
-            "method": "5-day block bootstrap of trailing up to 756 adjusted daily returns"}
+            "method": "5-day block bootstrap of trailing up to 756 " + ("adjusted" if price_adjusted else "unadjusted") + " daily returns",
+            "price_adjusted": price_adjusted,
+            "return_basis": "adjusted total return" if price_adjusted else "unadjusted price return",
+            "data_warnings": data_warnings}
 
 
 def backtest_sma(prices: pd.DataFrame, window: int = 200, trading_cost: float = .0015) -> dict[str, Any]:
     """Signal set at day close, position acts on NEXT trading day's return."""
-    adj = closes(prices, adjusted=True)
-    raw = closes(prices)
+    _, raw, adj, price_adjusted, data_warnings = _price_inputs(prices)
+    _require_daily_history(raw)
     df = pd.concat([adj.rename("adjusted"), raw.rename("close")], axis=1).dropna()
     if len(df) < window + 40:
         raise ValueError(f"Need at least {window+40} trading days for this backtest.")
@@ -263,4 +331,7 @@ def backtest_sma(prices: pd.DataFrame, window: int = 200, trading_cost: float = 
                 "volatility": float(d.std() * np.sqrt(252))}
     curves = pd.DataFrame({"SMA strategy": strat, "Buy & hold": baseline}).dropna()
     return {"strategy": stats(strat), "buy_hold": stats(baseline),
-            "trades": trades, "curve": curves, "cost": trading_cost, "window": window}
+            "trades": trades, "curve": curves, "cost": trading_cost, "window": window,
+            "price_adjusted": price_adjusted,
+            "return_basis": "adjusted total return" if price_adjusted else "unadjusted price return",
+            "data_warnings": data_warnings}

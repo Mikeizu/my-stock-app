@@ -24,10 +24,11 @@ def _market(code, currency, exchanges, suffixes, seeds, note=""):
 MARKETS = {
     "United States": _market("US", "USD", ("NMS", "NGM", "NCM", "NYQ", "ASE", "PCX", "BTS"), ("",),
         "MSFT AAPL GOOGL AMZN NVDA JPM JNJ KO PG XOM V PEP"),
-    "Nigeria": {"code": "NG", "currency": "NGN", "exchanges": (), "suffixes": (),
-        "seeds": (), "news_region": "NG", "news_edition": "NG:en", "supported": False,
-        "note": "Nigeria / NGX requires authorized CSV history or a licensed market-data feed. "
-                "Yahoo coverage is not supplied; Nigerian symbols will never be converted into US stocks."},
+    "Nigeria": {"code": "NG", "currency": "NGN", "exchanges": ("NGX",), "suffixes": (".NGX",),
+        "seeds": ("DANGCEM.NGX", "GTCO.NGX", "ZENITHBANK.NGX", "MTNN.NGX", "BUAFOODS.NGX", "SEPLAT.NGX"),
+        "news_region": "NG", "news_edition": "NG:en", "supported": True, "automatic_feed": False,
+        "note": "Search the built-in Nigerian company directory and recent news. Prices require retained authorized daily CSV history; "
+                ".NGX is an internal app identifier, not a Yahoo feed. Verify current listing status with NGX."},
     "United Kingdom": _market("GB", "GBP / GBp", ("LSE",), (".L",),
         "AZN.L SHEL.L HSBA.L ULVR.L BP.L REL.L GSK.L LSEG.L NG.L VOD.L"),
     "Canada": _market("CA", "CAD", ("TOR", "VAN", "CNQ", "NEO"), (".TO", ".V", ".CN", ".NE"),
@@ -99,6 +100,12 @@ def market_symbols(country: str) -> list[str]:
 
 def belongs_to_market(symbol: str, country: str) -> bool:
     market = MARKETS[country]
+    if country == "Nigeria":
+        from nigeria import normalize_ngx_symbol
+        try:
+            return normalize_ngx_symbol(symbol) == symbol
+        except ValueError:
+            return False
     if not market["supported"]:
         return False
     suffix = next((s for s in _KNOWN_SUFFIXES if symbol.endswith(s)), None)
@@ -119,6 +126,12 @@ def resolve_symbols(text: str, country: str) -> list[str]:
         raise ValueError(market["note"])
     symbols = []
     for value in entries:
+        if country == "Nigeria":
+            from nigeria import normalize_ngx_symbol
+            symbol = normalize_ngx_symbol(value)
+            if symbol not in symbols:
+                symbols.append(symbol)
+            continue
         symbol = normalize_symbol(value)
         suffix = next((s for s in _KNOWN_SUFFIXES if symbol.endswith(s)), None)
         if suffix and suffix not in market["suffixes"]:
@@ -140,6 +153,9 @@ def resolve_symbols(text: str, country: str) -> list[str]:
 def search_companies(query: str, country: str, limit: int = 10) -> list[dict]:
     """Discover actual equity listings, filtered by the selected exchange country."""
     market = MARKETS[country]
+    if country == "Nigeria":
+        from nigeria import ngx_search
+        return ngx_search(query, limit)
     if not market["supported"]:
         raise ValueError(market["note"])
     query = str(query or "").strip()

@@ -34,9 +34,12 @@ def _prepare_yahoo_cache(yf) -> None:
 
 def load_market(symbol: str) -> tuple[pd.DataFrame, dict, str]:
     """yfinance is an unofficial personal-research source; see README."""
+    sym = normalize_symbol(symbol)
+    if sym.endswith(".NGX"):
+        from nigeria import load_ng_market
+        return load_ng_market(sym)
     import yfinance as yf
     _prepare_yahoo_cache(yf)
-    sym = normalize_symbol(symbol)
     ticker = yf.Ticker(sym)
     prices = ticker.history(period="5y", interval="1d", auto_adjust=False, actions=True,
                             raise_errors=True, timeout=12)
@@ -119,6 +122,11 @@ def load_news_bundle(company: str, symbol: str, days: int = 14, limit: int = 18,
     Unknown-date, future-date and out-of-window records do not enter scoring.
     """
     sym = normalize_symbol(symbol)
+    if sym.endswith(".NGX"):
+        if country != "Nigeria":
+            raise ValueError("NGX news identifiers require the Nigeria listing market.")
+        from nigeria import normalize_ngx_symbol
+        sym = normalize_ngx_symbol(sym)[:-4]
     market = MARKETS[country]
     days, limit = max(1, min(int(days), 90)), max(1, min(int(limit), 50))
     name = re.sub(r"[^\w .&'-]", " ", str(company or ""), flags=re.UNICODE).strip()
@@ -136,7 +144,7 @@ def load_news_bundle(company: str, symbol: str, days: int = 14, limit: int = 18,
         ("Google News · ticker/events", "https://news.google.com/rss/search",
          {"q": event_query, "hl": "en-US", "gl": region, "ceid": edition}, event_query),
     ]
-    if market["supported"]:
+    if market["supported"] and country != "Nigeria":
         feeds.append(("Yahoo Finance RSS", "https://feeds.finance.yahoo.com/rss/2.0/headline",
                       {"s": sym, "region": region, "lang": "en-US"}, sym))
     now = datetime.now(timezone.utc)

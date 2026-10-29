@@ -1,90 +1,63 @@
-# MIKEIZU Stock Intelligence PRO v2
+# MIKEIZU Stock Intelligence PRO v3
 
-A private stock-research dashboard with country selection, company discovery and a combined percentage ranking. Research a basket, inspect the evidence behind each score, and review linked news, potential drivers and risks on the same page.
+A private research dashboard for comparing stocks across several countries, including a built-in Nigerian-company directory. It combines seven groups of evidence into a percentage research score, gives a short explanation and a **BUY**, **SELL**, **NOT GOOD TO BUY** or **WAIT FOR DATA** indicator, and separates past returns from future scenarios.
 
-**A research score of 80% means 80/100 on the displayed heuristic. It is not an 80% chance of profit, a predicted return, or an instruction to buy.** The app does not place orders, connect to a broker or guarantee investment results.
+**A research score of 80% means 80/100 on the displayed rules. It is not an 80% chance of profit or a predicted return.** Indicators are deterministic screening rules, not a statistically validated prediction model. The app does not submit orders, connect to a broker, or guarantee profits.
 
 ## Start the app
 
-Use **Python 3.11, 3.12 or 3.13**. Extract the ZIP to a writable folder before running it. Internet is needed to install dependencies and retrieve external market data and news. Standard public-feed access needs no API key or password.
+Use **Python 3.11, 3.12 or 3.13**. Extract the ZIP into a writable folder before running it. Internet is needed for the first package installation and for external market data and news. The standard public adapters need no API key or password.
 
-- **Windows:** Install Python from [python.org](https://www.python.org/downloads/) with “Add Python to PATH” enabled, then double-click `START_WINDOWS.bat`. It creates `.venv`, installs packages and opens the local dashboard. Keep the terminal open; `Ctrl+C` stops the server.
-- **macOS / Linux:** Open a terminal in the extracted folder and run `bash run_linux_mac.sh`. Open the loopback address and port 8501 shown in the terminal if a browser does not open automatically.
+- **Windows:** Install Python from [python.org](https://www.python.org/downloads/) with “Add Python to PATH” enabled, then double-click `START_WINDOWS.bat`. It creates `.venv`, installs dependencies and opens the local dashboard. Keep the terminal open; `Ctrl+C` stops it.
+- **macOS / Linux:** In the extracted app folder, run `bash run_linux_mac.sh`. If a browser does not open automatically, use the loopback address and port 8501 printed by Streamlit.
 
-Both launchers bind to `127.0.0.1`; they do not publish the app on the internet. This is a Python source application, not a signed Windows EXE.
+Both launchers bind to `127.0.0.1`; they do not publish the app on the internet. This is Python source, not a signed Windows EXE.
 
-## Discover, compare and investigate
+## Research Nigeria and other countries together
 
-1. Select **Stock market / country** in the sidebar and choose **Balanced**, **Income** or **Growth**.
-2. In **Discover & Rank**, search a company name or ticker with **Find stocks**. Choose matching listings and use **Add selected companies to basket**. You can also use the starter basket or enter known exchange tickers manually.
-3. Choose up to **24 stocks per batch**, including imported CSV files, and press **Run combined research**. The app gathers price history, available fundamentals and recent company/ticker news, then calculates the seven-factor score.
-4. Review **Data coverage**, **Evidence sufficient**, the rating and source dates alongside the score. Stocks with sufficient evidence sort before incomplete observations. Export the complete ranking as CSV when needed.
-5. Use **Inspect a ranked stock** to see the factor breakdown, price chart, conditional prospects, risks, verification checklist and source-linked headlines. The same selected stock is available to the dedicated research tools.
+1. In **Countries to research**, select up to **eight listing markets**. Nigeria and United States are selected initially. **Country for individual tools** controls the single-stock tools; it does not limit the main basket to one country.
+2. In each country section, search for companies, select matching results and add them to that country's basket. You can also keep the starter examples or enter additional exchange tickers.
+3. Optionally import daily price CSVs and dated company fundamentals. A CSV for a ticker takes precedence over an online request for that ticker in the same batch.
+4. Select at most **48 stocks in total**, then choose **Run multi-country deep research**.
+5. Review the **Indicator**, **Brief analysis**, **Data coverage**, currency, source and price date together. Use **Inspect a researched stock** for the plain-language buying case, risks, return analysis, source-linked news and detailed rules.
+6. To assess shares you already own, enable **Review this basket as stocks I already own**. Only that mode can produce a SELL indicator. Without it, weak buying evidence produces NOT GOOD TO BUY.
 
-Changing strategy recalculates scores from the downloaded evidence. **Refresh prices, search & news** clears the external-data caches; run research again to fetch new observations. Price history is cached for up to 30 minutes; company search and news are cached for up to 15 minutes.
+Changing strategy or holding mode recalculates the displayed decision from already-downloaded evidence. **Refresh prices, search & news** clears external-data caches; run research again after refreshing. Price data is cached for up to 30 minutes; company discovery and news for up to 15 minutes. Retained NGX histories must be updated by importing new authorized observations; clearing a cache does not create new NGX data.
 
-### What the country selector covers
+The CSV ranking export includes each stock's country and currency. The stock-brief JSON export includes its decision, metrics, performance analysis and source-query information. Values in different currencies are not added together.
+
+### Markets and ticker identities
 
 There are **30 listing-market presets**: United States, Nigeria, United Kingdom, Canada, India, South Africa, Germany, France, Australia, Japan, China, Hong Kong, Brazil, Singapore, Switzerland, Netherlands, Italy, Spain, Sweden, Norway, Denmark, Finland, Belgium, Mexico, South Korea, Taiwan, Indonesia, Malaysia, New Zealand and Saudi Arabia.
 
-The filter describes the **listing exchange**, not the issuer's headquarters. A US-listed ADR can therefore appear under United States. Yahoo company/ticker discovery is not a full-text sector screener. Starter lists are examples, not recommendations or complete exchange directories; searches and research batches do not scan every stock or every website.
+Country means **listing exchange**, not issuer headquarters. A US-listed ADR can appear under United States. Starter baskets are examples, not recommendations or complete exchange directories. Yahoo company/ticker discovery is not a full-text sector screener, and the app does not scan every listing or every website.
 
-Bare local tickers receive the primary suffix for the selected market: for example `VOD` becomes `VOD.L` in United Kingdom and `RELIANCE` becomes `RELIANCE.NS` in India. Explicit listings outside the selected market are rejected. Use `.BO` for BSE, `.SZ` for Shenzhen or another supported secondary suffix when appropriate. Stock availability remains subject to provider coverage.
+Bare local tickers receive the selected market's primary suffix, for example `VOD` → `VOD.L` in United Kingdom and `RELIANCE` → `RELIANCE.NS` in India. Use `.BO` for a BSE listing or `.SZ` for Shenzhen when appropriate. Explicit listings outside the chosen market are rejected. Nigeria uses an internal `.NGX` namespace described below. Stock identities and watchlist entries include both country and ticker so a similar symbol in another market does not overwrite an entry.
 
-Quotes retain their native units. **GBp means British pence**, while GBP means pounds; **ZAc means South African cents**, while ZAR means rand. Check the displayed currency before planning income. Comparisons are not adjusted for exchange-rate movements, tax, sector or country differences.
+Prices retain their native units. **GBp means British pence**, while GBP means pounds; **ZAc means South African cents**, while ZAR means rand. No currency conversion, tax or country/sector normalization is applied. Check the quote unit before interpreting a gain/loss amount.
 
-## How percentage rankings work
+## Nigerian stocks and authorized data
 
-The combined score uses seven groups of observed evidence. The nominal weights sum to 100% for each strategy:
+The app includes a **36-company NGX research directory** with names and sectors, including banks, cement producers, telecommunications companies and other issuers. Search locally by company, ticker or sector even if quote access is unavailable. The directory is a starting list, not a complete or continuously verified record of current listings; confirm listing status and announcements with the [Nigerian Exchange](https://ngxgroup.com/exchange/data/equities-price-list/).
 
-| Factor | Balanced | Income | Growth |
-|---|---:|---:|---:|
-| Income: observed trailing dividends and earnings payout | 15% | 30% | 5% |
-| Quality: profit margin, return on equity and debt/equity | 20% | 20% | 20% |
-| Growth: reported revenue and earnings growth | 15% | 5% | 25% |
-| Momentum: historical returns and 200-day price trend | 20% | 10% | 25% |
-| Valuation: trailing price/earnings | 10% | 10% | 10% |
-| Risk: historical annualized volatility and beta | 10% | 15% | 5% |
-| News: recent headline-only sentiment | 10% | 10% | 10% |
+`GTCO.NGX`, `DANGCEM.NGX` and similar identifiers belong to this app. **`.NGX` is not a Yahoo Finance suffix.** Nigerian requests are never silently converted into unrelated US stocks.
 
-Each factor receives a score from 0 to 100. Its effective weight is its strategy weight multiplied by the fraction of underlying inputs available. The final percentage is the weighted average over that available evidence. **Data coverage** reports the supported portion of the original total weight, so one populated input cannot make an otherwise missing factor look complete. Missing inputs are never invented.
+**No automatic live or licensed NGX price feed is bundled.** Without authorized daily history, the app can still assemble company metadata and returned regional news, but it shows WAIT FOR DATA for the trading indicator and withholds returns. It does not invent quotes, fundamentals or news. To enable Nigerian price research:
 
-News uses a bounded sentiment heuristic and financial phrases, not verified full-text analysis. Full news input coverage requires **five distinct, dated, citable HTTPS stories from the past 14 days**. Duplicate titles and duplicate story URLs, including common tracking variations, do not multiply the evidence. Future, undated, stale or uncitable stories do not influence the current news score. A positive headline can still describe an irrelevant or unreliable claim; read the source.
+1. Obtain daily history you may use from an exchange, broker or authorized provider.
+2. Import one CSV per ticker in the Nigeria section, named for example `GTCO.csv` or `GTCO.NGX.csv`.
+3. Use **NGN** as the price unit. Add dated financial inputs if you want a sufficiently supported fundamental assessment.
+4. Optionally enable **Remember NGX imports on this computer**. This saves the authorized history and whitelisted financial metadata under `data/ngx/` for later scans.
 
-An eligible shortlist entry requires:
+Remembered data stays local and keeps its original observation dates; it does not become live or independently verified. Import an updated history and financial statement when required. `data/ngx/` may contain private/licensed information and must not be included in a distributable ZIP. Integrating a commercial NGX feed requires separate provider access, licensing and implementation; none is implied by the directory.
 
-- At least **60% weighted input coverage** and **200 daily price observations**.
-- A valid positive closing price dated no more than **seven calendar days ago**, with no future date.
-- At least **three reported fundamental inputs** among profit margin, ROE, debt/equity, revenue growth, earnings growth and trailing P/E.
-- No reported negative debt/equity and no historical annualized volatility above **80%**.
+## Price and financial imports
 
-Incomplete or stale records retain partial observations but are labelled **INSUFFICIENT / STALE DATA**. Severe volatility or negative-equity evidence produces **HIGH RISK / REVIEW** when the other data gates pass. Other labels include **RESEARCH CANDIDATE**, **WATCH / COMPARE** and **CAUTION / REVIEW**. Eligibility means sufficient evidence for comparison; it does not mean the investment is suitable or safe.
+### Daily price CSVs
 
-The methodology also flags unusually high trailing yield, unsustainable earnings payout, losses and other supplied risk indicators. A high trailing yield can follow a collapsing price or a special dividend. Broad financial ratios are not normalized for sector accounting, fiscal period or market conditions. Review issuer filings and comparable companies before relying on them.
+Required columns: `Date,Close`. Optional columns: `Adj Close,Dividends`. Files are limited to 20,000 rows. Use one positive daily closing price per session; duplicate dates keep the last supplied row.
 
-When available, provider analyst targets appear as **opinion context**. Individual target dates, assumptions and currency alignment are not independently verified. Analyst opinions, simulated scenarios and historical backtests are **excluded from the research score**.
-
-## News, prospects and research tools
-
-The combined news adapter searches Google News by company and ticker/events, and Yahoo ticker RSS where supported. It merges returned headlines, keeps publication dates and source links, and exposes each query's success or failure under **Source coverage & web-search provenance**. Partial failures stay visible; a failed feed is not replaced by fabricated news.
-
-The prospects panel separates observed strengths, risks and questions to verify. Potential drivers are conditional on future execution and events. It cannot identify every possible prospect or unforeseen risk. Links to issuer-report searches and the market-data source support further investigation.
-
-The selected stock also supports:
-
-- **Historical scenarios:** 1,000 five-day block-bootstrap paths, using up to 756 adjusted daily returns for 1–24 months. P10/P50/P90 are illustrative historical-resampling outcomes, not reliable forecasts or calibrated confidence intervals. At least 252 daily prices are required.
-- **Dividend income planning:** Whole shares multiplied by observed trailing 12-month dividends, assuming those payments repeat. Monthly equivalents are budgeting averages, not payment schedules. No future declaration, tax, fee or currency conversion is included.
-- **Backtest Lab:** Long-or-cash moving-average strategies use next-session positions, an entry/exit cost and a comparable buy-and-hold period. The combined panel uses 200 days and 0.15% per entry/exit; the dedicated tab offers other settings. Results are in-sample and omit slippage, tax, FX and cash interest.
-- **Watchlist:** Local SQLite storage for symbols, notes and an optional review price, plus CSV export. A review price is not an automatic alert.
-- **Optional local AI:** Install [Ollama](https://ollama.com/) separately and download a model, for example `ollama pull llama3.2:3b`. The News Intelligence tab can summarize the already-retrieved headline metadata through the local Ollama server. It does not read article bodies, does not alter scores and can produce inaccuracies. Ollama is optional; standard research works without an LLM subscription.
-
-## Nigeria / NGX and licensed CSV data
-
-Nigeria is selectable, but **this package does not supply a live or licensed NGX price feed**. Nigerian symbols are not silently converted into US stocks. Use authorized exchange, broker or other licensed price histories through **Add licensed CSV price histories** in Discover & Rank. Importing CSVs is also available for the other markets.
-
-Use one CSV per stock, with its ticker as the filename, such as `DANGCEM.csv`. Optional company mappings such as `DANGCEM=Dangote Cement` improve news relevance. Choose the currency or price unit actually used in all files in the batch.
-
-Required columns are `Date,Close`; optional columns are `Adj Close,Dividends`. Files are limited to 20,000 rows. For example, the following illustrates the **format only**, not actual market history:
+The following is a **format example only**, not market history:
 
 ```csv
 Date,Close,Adj Close,Dividends
@@ -92,15 +65,93 @@ Date,Close,Adj Close,Dividends
 2026-01-05,101.0,99.0,0
 ```
 
-Without adjusted closes, returns and scenarios use unadjusted prices and may omit dividends or include split distortions. Without a Dividends column, cash yield is missing rather than assumed. Price CSVs do not supply company fundamentals, so price-only imports cannot qualify for the eligible shortlist. News availability does not fill missing financial statements. The single-file **CSV / NGX Data** tab remains available for price research.
+The analytics reject weekly, monthly and overly sparse series rather than annualizing them as daily observations. This is a cadence check, not a complete exchange-calendar audit. If adjusted closes are absent, invalid or fail to cover the valid raw series, the entire return calculation falls back to raw closes and reports that basis. Unadjusted returns may omit dividends or include split distortions. A synthetic copy of Close is not treated as genuine dividend-adjusted evidence.
 
-Obtain data you have permission to use; the [Nigerian Exchange](https://ngxgroup.com/exchange/data/) provides information about authorized data services. Integrating a licensed NGX or commercial global feed requires separate development and appropriate agreements; it is not included here.
+Without a Dividends column, observed cash yield remains missing. Price history alone does not supply profitability, valuation or balance-sheet figures and generally cannot qualify for a supported BUY indicator. Missing news or fundamentals is not evidence of strength.
 
-## Connectivity, privacy and troubleshooting
+### Dated company fundamentals
 
-Default market data uses [`yfinance`](https://ranaroussi.github.io/yfinance/), unofficial access to Yahoo Finance intended for personal research. It is not an official licensed quote feed. Prices and fundamentals may be delayed, incomplete, stale, rate-limited or blocked. The app displays actual observed price dates and download-check timestamps; those are different from real-time tradable quotes.
+Use **Add dated company fundamentals**, then **Download blank fundamentals template**. The CSV accepts these headers:
 
-Networks running the standard adapters may need these HTTPS destinations:
+```csv
+Country,Symbol,AsOf,Currency,Source,profit_margin,roe,debt_eq,revenue_growth,earnings_growth,pe,payout,beta,market_cap
+```
+
+- `Country`, `Symbol`, `AsOf` and `Currency` are required. Country uses an app listing-market name, such as `Nigeria` or `United States`.
+- `AsOf` is the financial statement's ISO date, `YYYY-MM-DD`. Future dates and statements older than **550 days** are rejected. This freshness rule is not independent verification of the accounts.
+- `Currency` must match the stock's actual quote unit, including case-sensitive `GBP`/`GBp` or `ZAR`/`ZAc` distinctions. Nigerian retained data uses NGN.
+- `Source` is optional and must be an HTTPS reference without embedded credentials.
+- Ratios use decimals: `profit_margin=0.20` means 20%; `payout=0.50` means 50%. **`debt_eq` uses percentage points**, so 80 means 80%. P/E is a multiple; market cap is in the stated currency.
+- Leave unknown fields blank. Supply at least one observed financial field per row. Nonfinite values, unknown columns and duplicate country/ticker rows are rejected; the limit is 2,000 rows.
+
+Inputs are labelled **User import**. Copy figures only from sources you are authorized to use, check periods and units, and do not place credentials in the CSV. Filling a row does not establish a complete investment case. Provider-supplied fundamentals may have different reporting periods and dates that the app cannot independently verify.
+
+## Indicators and their rules
+
+| Indicator | Meaning |
+|---|---|
+| **BUY** | Meets the current strategy's evidence, trend and buying-risk rules; investigate before committing capital. |
+| **SELL** | An exit-review signal for an **existing holding** with sufficiently supported weak evidence and a falling trend. |
+| **NOT GOOD TO BUY** | Current usable evidence does not satisfy the buying rules. It is not a prediction that the business will fail. |
+| **WAIT FOR DATA** | Price evidence, cadence, coverage, fundamentals or dates are missing/unusable. It is not a negative verdict on the company. |
+
+BUY requires an eligible score of at least **72/100**, a positive six-month historical return, price at or above the 200-day average, and no enumerated buying-rule risk flags. Guards include unconfirmed/non-positive profit margin, earnings payout outside 0–100%, trailing yield above 9%, missing or above-60% annualized volatility, negative equity, non-positive P/E, RSI above 80, reported average volume below 10,000 shares, and strongly negative headline tone. Some guards apply only when the corresponding observation is supplied; absent data is not independently verified as safe.
+
+SELL requires holding mode, eligible fresh evidence, a score below **55**, a negative six-month return and price below the 200-day average. It is an instruction to review an exit, not an automatically executed sale. Costs, taxes, liquidity and newer announcements can change the decision.
+
+Missing/stale evidence takes precedence over a trading conclusion. Imported fundamentals need a valid date within 550 days. Each selected-stock panel shows reasons and rule identifiers; the numerical thresholds are disclosed heuristics, not statistically established profit probabilities.
+
+### Seven-factor percentage score
+
+| Factor | Balanced | Income | Growth |
+|---|---:|---:|---:|
+| Income: observed dividends and earnings payout | 15% | 30% | 5% |
+| Quality: profit margin, ROE and debt/equity | 20% | 20% | 20% |
+| Growth: reported revenue and earnings growth | 15% | 5% | 25% |
+| Momentum: historical returns and 200-day trend | 20% | 10% | 25% |
+| Valuation: trailing P/E | 10% | 10% | 10% |
+| Risk: historical volatility and beta | 10% | 15% | 5% |
+| News: recent headline tone | 10% | 10% | 10% |
+
+Each factor's effective weight is its strategy weight multiplied by the fraction of underlying inputs available. The percentage score is the average over that available evidence; **Data coverage** is the supported share of the original total weight. One populated field cannot make a whole missing group look complete.
+
+Underlying eligibility requires at least **60% weighted input coverage**, **200 daily observations**, a positive close no more than **seven calendar days old** with no future date, and at least **three reported inputs** among margin, ROE, debt/equity, revenue growth, earnings growth and trailing P/E. Negative reported debt/equity or annualized volatility above 80% excludes a stock from the eligible shortlist. BUY has the additional stricter guards above.
+
+A high trailing yield can follow a collapsing price or one-off payment. Accounting ratios are not normalized for industry, country or fiscal period. Analyst targets, when supplied, are labelled provider opinions with unverified individual dates/assumptions; they do not enter the score. Scenarios and in-sample backtests are also excluded from the score.
+
+## Monthly/annual returns and possible gains or losses
+
+The selected stock's return view has three separate concepts:
+
+- **Observed performance:** trailing one-calendar-month and one-calendar-year returns ending at the latest observed close. A full corresponding interval is required; the start uses the nearest available observation on or before the cutoff, within seven days. These are not shortened-window annualizations. A separate history table shows completed earlier calendar months and omits the latest observed month.
+- **Hypothetical historical gain/loss:** applies those past returns to the amount you enter. It is not your actual account P&L and assumes a fractional allocation. A fee is charged per entry and exit; the allocation includes entry cost. Taxes, spreads/slippage and FX are excluded.
+- **Future scenarios:** separate 1-month and 12-month historical-resampling simulations. The app does not divide an annual projection by 12 or turn past returns into a promised monthly payment. P10/P50/P90 are simulated percentiles, not calibrated future probabilities or reliable price targets. Losses can exceed displayed cases.
+
+Simulations use 1,000 five-day block-bootstrap paths from up to 756 recent daily returns and require at least 252 daily prices. Stale prices suppress future scenarios while retaining dated historical observations. Adjusted total returns are used only when the series supports them; otherwise the app discloses raw-price returns. Dividends are not added again to an adjusted total return.
+
+The separate **historical dividend run-rate** multiplies affordable whole shares by observed trailing cash dividends, assuming they repeat. Its monthly equivalent is a budgeting average, not a payment schedule or guaranteed monthly profit. Fees affect the modeled affordable shares; taxes and future dividend changes remain excluded.
+
+All gain/loss amounts stay in the selected stock's quote currency/unit. There is no cross-country portfolio profit total or automatic currency conversion.
+
+## News, plain-language briefs and other tools
+
+The news adapter searches Google News by company and ticker/events and Yahoo ticker RSS where supported. Nigeria uses regional Google searches without pretending that `.NGX` is a Yahoo ticker. It merges returned headlines, publication dates, source links and query provenance. Full news coverage needs five distinct, dated, citable HTTPS stories from the past 14 days. Duplicate titles/URLs, common tracking variants, future records, undated stories and stale records do not increase the score.
+
+This is **headline metadata analysis**, not full article reading or an exhaustive deep-web crawl. Returned stories can be irrelevant or wrong. Source failures stay visible; no replacement news is invented. The short buying case, risks and verification checklist describe supplied observations and conditional drivers, not every possible prospect. Open original stories, issuer filings and exchange announcements before acting.
+
+This build does not call the ChatGPT Deep Research connector; that connector was not available in the development session. Its research features use the packaged market/news adapters and disclosed rules.
+
+Other tools remain available:
+
+- **Backtest Lab:** long-or-cash moving-average positions take effect next session and deduct entry/exit costs over a comparable buy-and-hold period. Results are in-sample and omit slippage, tax, FX and cash interest. They do not validate future profitability.
+- **Country-aware watchlist:** SQLite stores country, symbol, notes and an optional review price. Existing symbol-only watchlists migrate transactionally while preserving their records; known suffixes infer the legacy market, and bare legacy tickers retain the prior US default. A review price is not an automatic alert.
+- **Optional local AI:** install [Ollama](https://ollama.com/) separately and download a model, for example `ollama pull llama3.2:3b`. The News Intelligence tab can summarize retrieved headline metadata through the local Ollama server. It does not read article bodies or alter scores, and it can be inaccurate. Standard research does not require an LLM subscription.
+
+## Connectivity, privacy and limits
+
+Default non-Nigerian prices use [`yfinance`](https://ranaroussi.github.io/yfinance/), unofficial personal-research access to Yahoo Finance. Prices/fundamentals may be delayed, incomplete, stale, rate-limited or blocked. This is not an officially licensed real-time feed. The price observation date differs from the download-check timestamp.
+
+Standard adapter HTTPS destinations include:
 
 ```text
 query1.finance.yahoo.com
@@ -112,27 +163,41 @@ feeds.finance.yahoo.com
 news.google.com
 ```
 
-Package installation also needs PyPI and its package-file hosts. Browser links to original publishers and issuer reports use their own destinations. No feed API credentials are required by the current public adapters; access can still be denied by the network or provider. Do not disable TLS verification to work around connectivity errors.
+Package installation needs PyPI and package-file hosts. Original publishers, issuer reports and the official NGX price-list link use their own destinations. Public adapters need no feed key; access may still be denied by a proxy or provider. Do not disable TLS verification to work around a denial.
 
-If a search or stock fails, check the selected listing country, ticker suffix, provider status and displayed error. Clear caches and rerun after an access or configuration change. If port 8501 is occupied, stop the existing server or choose another port in the launcher. A read-only extraction folder or running directly inside a ZIP can prevent installation or local storage.
+Local files to protect:
 
-The watchlist is stored in `data/watchlist.sqlite3`; back it up separately. `data/provider-cache/` contains local Yahoo cache databases and may hold provider session cookies. Keep watchlists, caches, `.venv`, logs and local secrets out of distributable ZIPs. There are no supplied cloud accounts, push notifications, background scheduler, user authentication or broker permissions.
+- `data/watchlist.sqlite3`: watchlist records; back up separately.
+- `data/ngx/`: retained authorized Nigerian histories and financial metadata.
+- `data/provider-cache/`: Yahoo cache/session data, which may include provider cookies.
 
-For public or commercial deployment, arrange licensed market-data and news sources and review their redistribution rights. This source package grants no market-data license.
+Keep those directories/files, `.venv`, logs and local secrets out of distributable ZIPs. No cloud accounts, broker credentials, authentication system, scheduler, push notifications, live WebSocket feed or commercial-data redistribution license is supplied. For public/commercial deployment, use properly licensed feeds and arrange the necessary security and operational controls.
+
+If a request fails, check the country, ticker suffix, input dates, actual quote units, displayed provider error and network access. Clear caches and rerun after a meaningful access change. If port 8501 is occupied, stop the server you started or change its port. Run from a writable extracted folder, not directly inside the ZIP.
 
 ## Developer checks and validation status
 
-From the extracted app folder, use an isolated environment:
+From the extracted app folder:
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements-dev.txt
 .venv/bin/python -m pytest -q
-.venv/bin/python -m compileall -q app.py dashboard.py engine.py markets.py providers.py research.py storage.py ollama_helper.py
+.venv/bin/python -m compileall -q app.py dashboard.py engine.py markets.py providers.py research.py signals.py workflow.py nigeria.py financials.py storage.py ollama_helper.py
 ```
 
-On Windows, use `.venv\Scripts\python.exe` in place of `.venv/bin/python` after creating the environment with your installed Python launcher.
+On Windows, use `.venv\Scripts\python.exe` instead of `.venv/bin/python` after creating the environment with your installed Python launcher.
 
-Tests cover scoring, missing and stale evidence, country/ticker rules, feed parsing and deduplication, CSV handling and mocked Streamlit workflows. Synthetic test fixtures are not presented as actual market observations.
+Tests cover scoring, indicators, historical/scenario calculations, missing and stale evidence, cadence and adjusted-price alignment, country identities, feed parsing, NGX imports, financial validation, watchlist migration and mocked application workflows. Synthetic fixtures are test data, not live market observations.
 
-**Live-feed validation remains blocked in the current development cloud:** tested Yahoo and Google endpoints returned proxy tunnel `403 Forbidden`. Network-domain additions have been saved for environment-settings review; saving a draft does not apply network policy or establish working feeds. Automated provider and application tests use controlled fixtures. No live price, stock recommendation or news connectivity claim is made from those tests.
+**Live-feed validation remains blocked in the development cloud:** Yahoo, Google and official NGX requests returned proxy tunnel `403 Forbidden`. Relevant network settings remain a separate environment concern; saving a draft does not apply policy or prove feed access. Automated fixtures do not establish live quotes, live news or a profitable recommendation.
+
+## Changes in v3
+
+- One research basket across several countries, with separate country/ticker identities.
+- A searchable Nigerian directory and optional retained authorized NGX imports.
+- Explainable buying/holder-exit indicators, explicit missing-data results and dated financial imports.
+- Calendar-based observed monthly/annual returns, native-currency gain/loss amounts and separately simulated future horizons.
+- Daily-cadence validation prevents weekly/monthly rows being annualized as trading days.
+- A single coherent adjusted/raw series prevents an old adjusted endpoint from being labelled current.
+- Country-aware watchlist migration preserves existing notes and review prices.

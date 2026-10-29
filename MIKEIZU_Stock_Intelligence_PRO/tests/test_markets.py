@@ -23,13 +23,17 @@ def test_symbols_never_silently_change_a_foreign_listing(text, country):
         resolve_symbols(text, country)
 
 
-def test_nigeria_never_resolves_to_an_unrelated_us_stock():
-    assert market_symbols("Nigeria") == []
+def test_nigeria_directory_never_resolves_to_an_unrelated_us_stock(monkeypatch):
+    def unexpected(*args, **kwargs):
+        pytest.fail("Nigeria directory discovery must work locally without a Yahoo request")
+    monkeypatch.setattr("markets.requests.get", unexpected)
+    assert market_symbols("Nigeria")
+    assert all(symbol.endswith(".NGX") for symbol in market_symbols("Nigeria"))
     assert resolve_symbols("", "Nigeria") == []
-    with pytest.raises(ValueError, match="licensed"):
-        resolve_symbols("DANGCEM,GTCO", "Nigeria")
-    with pytest.raises(ValueError, match="licensed"):
-        search_companies("Guaranty", "Nigeria")
+    assert resolve_symbols("DANGCEM,GTCO", "Nigeria") == ["DANGCEM.NGX", "GTCO.NGX"]
+    assert search_companies("Guaranty", "Nigeria")[0]["symbol"] == "GTCO.NGX"
+    with pytest.raises(ValueError):
+        resolve_symbols("MSFT", "Nigeria")
 
 
 def test_seed_lists_are_not_mutated_by_callers():
